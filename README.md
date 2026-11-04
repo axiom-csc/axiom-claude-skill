@@ -1,16 +1,36 @@
-# axiom-claude-skill
+# Axiom CSC — Deterministic Circuit Breaker for AI Coding Agents
 
-> **Stop Claude from guessing your security, auth, and system constraints.**
+![Performance](https://img.shields.io/badge/performance-%3C0.09ms%20Rust%20engine-brightgreen)
+![Hook](https://img.shields.io/badge/hook-PreToolUse-blue)
+![Modes](https://img.shields.io/badge/modes-STRICT%20%7C%20AUDIT%20%7C%20REPAIR-orange)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blue)](https://claude.ai/code)
+> AI agents don't fail because they write bad syntax. They fail because they **guess on ambiguous constraints.**
 
 ![Axiom CSC Demo](demo/demo.gif)
-
-
-LLMs hallucinate on hard constraints. Claude will pick `role = "admin"` and assume it means full database access. It will invent a `$9,999` payment limit that fits no real policy. It will write `LIMIT 1000` on a query that should cap at 50 rows.
-
-Axiom CSC is the Claude Code skill that makes this impossible.
+       [ Claude Code / AI Agent Pipeline ]
+                        |
+                ( PreToolUse Hook )
+                        |
++───────────────────────────+───────────────────────────+
+| Axiom Core Engine |
+| +──────────────────────────────────────────────────+ |
+| | Noema: Scope-Aware AST Lowering Pipeline | |
+| +─────────────────────+────────────────────────────+ |
+| | |
+| +──────────────────────+───────────────────────────+ |
+| | Lemma: Relational Logic Solver (<0.09ms Rust) | |
+| +─────────────────────+────────────────────────────+ |
+| | |
+| +──────────────────────+───────────────────────────+ |
+| | Manam: Tri-State Epistemic Controller | |
+| +─────────────────────+────────────────────────────+ |
++────────────────────────+───────────────────────────────+
+|
++───────────────────+───────────────────+
+v v
+[TRUE / FALSE] [UNKNOWN]
+(Permit Tool Run) (Fail-Closed CLI Halt)
 
 ## Install
 
@@ -59,6 +79,17 @@ if user.role == "admin":
 ```
 
 **With Axiom:**
++==============================================================+
+| AXIOM CSC - INVARIANT CIRCUIT BREAKER |
++==============================================================+
+
+State: UNKNOWN
+Entity: role_assignment
+Rule: auth.role_permission_scope
+[A] Auto-generate a secure default schema block
+[I] Inject the missing value inline now
+[B] Bypass this check (logged to .axiom/audit.log)
+[Q] Quit and block execution
 
 ## Modes
 
@@ -87,6 +118,10 @@ rules:
 ## Engine
 
 Powered by [axiom-csc/axiom-core](https://github.com/axiom-csc/axiom-core) — deterministic graph evaluation at ~0.09ms p50.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Good first issues tagged on GitHub — S3 file size extractor, Kubernetes quota templates, Supabase RLS parser.
 
 ## License
 

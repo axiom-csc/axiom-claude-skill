@@ -1,56 +1,175 @@
 #!/usr/bin/env python3
-# Axiom PreToolUse Hook
-# Fires before every Bash/Edit tool. Blocks if invariants violated.
-# Exit 0 = allow. Exit 1 = block.
-import sys, json, pathlib, subprocess, time
+"""axiom-csc PreToolUse hook - intercepts Claude Code tool calls before execution."""
 
-AST_OUT = ".axiom/_hook_ast.json"
-RULES   = ".axiom/invariants.yaml"
-STATE   = ".axiom/state.json"
-SOLVER  = ".claude/skills/axiom-csc/scripts/eval_lemma.py"
-LOWERER = ".claude/skills/axiom-csc/scripts/lower_ast.py"
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+INTERCEPTED_TOOLS = {"Bash", "Edit", "Write", "MultiEdit"}
+AXIOM_DIR = Path(".axiom")
+STATE_FILE = AXIOM_DIR / "state.json"
+AUDIT_LOG = AXIOM_DIR / "audit.log"
+SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
 
 def load_state():
-    p = pathlib.Path(STATE)
-    if p.exists():
-        try: return json.loads(p.read_text())
-        except: pass
-    return {"verified_entities": {}, "blocked_attempts": 0, "last_eval_ms": 0}
+    try:
+        return json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+    except Exception:
+        return {}
 
 def save_state(state):
-    pathlib.Path(STATE).write_text(json.dumps(state, indent=2))
+    try:
+        AXIOM_DIR.mkdir(exist_ok=True)
+        STATE_FILE.write_text(json.dumps(state, indent=2))
+    except Exception:
+        pass
+
+def log_audit(action, entity, rule, context):
+    try:
+        AUDIT_LOG.parent.mkdir(exist_ok=True)
+        with open(AUDIT_LOG, "a") as f:
+            f.write(json.dumps({
+                "ts": time.time(),
+                "action": action,
+                "entity": entity,
+                "rule": rule,
+                "context": context[:200]
+            }) + "\n")
+    except Exception:
+        pass
+
+def get_context(tool_input):
+    for field in ("command", "new_string", "content", "description"):
+        if field in tool_input and tool_input[field]:
+            return str(tool_input[field])
+    return str(tool_input)
+
+def run_pipeline(context):
+    import subprocess
+    ast_file = AXIOM_DIR / "ast.json"
+    AXIOM_DIR.mkdir(exist_ok=True)
+    lower = SCRIPTS_DIR / "lower_ast.py"
+    lemma = SCRIPTS_DIR / "eval_lemma.py"
+    if not lower.exists() or not lemma.exists():
+        return 0, ""
+    r1 = subprocess.run(
+        [sys.executable, str(lower), "--text", context, "--out", str(ast_file)],
+        capture_output=True, text=True, timeout=5
+    )
+    if r1.returncode != 0:
+        return 0, ""
+    r2 = subprocess.run(
+        [sys.executable, str(lemma), "--ast", str(ast_file)],
+        capture_output=True, text=True, timeout=5
+    )
+    return r2.returncode, r2.stdout + r2.stderr
+
+def parse_violation(output):
+    entity = "constraint"
+    rule = "unknown_rule"
+    for line in output.splitlines():
+        if "concept:" in line or "entity:" in line:
+            entity = line.split(":", 1)[-1].strip()
+        if "rule:" in line or "invariant:" in line:
+            rule = line.split(":", 1)[-1].strip()
+    return entity, rule
+
+def interactive_halt(entity, rule, context):
+    ctx_preview = context[:60] + ("..." if len(context) > 60 else "")
+    print("")
+    print("\033[91m+==============================================================+")
+    print("|          AXIOM CSC - INVARIANT CIRCUIT BREAKER               |")
+    print("+==============================================================+\033[0m")
+    print("")
+    print("  \033[33mState:\033[0m    UNKNOWN")
+    print("  \033[33mEntity:\033[0m   " + entity)
+    print("  \033[33mRule:\033[0m     " + rule)
+    print("  \033[33mContext:\033[0m  " + ctx_preview)
+    print("")
+    print("\033[90m--------------------------------------------------------------\033[0m")
+    print("  \033[32m[A]\033[0m  Auto-generate a secure default schema block")
+    print("  \033[32m[I]\033[0m  Inject the missing value inline now")
+    print("  \033[33m[B]\033[0m  Bypass this check (logged to .axiom/audit.log)")
+    print("  \033[31m[Q]\033[0m  Quit and block execution")
+    print("\033[90m--------------------------------------------------------------\033[0m")
+    print("  Choice: ", end="", flush=True)
+
+    try:
+        import tty, termios
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1).upper()
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    except Exception:
+        ch = "Q"
+
+    print(ch)
+
+    if ch == "B":
+        log_audit("BYPASS", entity, rule, context)
+        print("\n  \033[33m-> Bypass logged to .axiom/audit.log. Proceeding.\033[0m\n")
+        sys.exit(0)
+    elif ch == "I":
+        try:
+            import termios
+            fd = sys.stdin.fileno()
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        except Exception:
+            pass
+        print("\n  Enter value for \033[33m" + rule + "\033[0m: ", end="", flush=True)
+        value = input()
+        log_audit("INJECT_ATTEMPT", entity, rule, "user_value=" + value)
+        print("\n  \033[32m-> Value '" + value + "' captured.\033[0m")
+        print("  Add to .axiom/invariants.yaml to persist, then retry.\n")
+        sys.exit(1)
+    elif ch == "A":
+        stub = "\n# Auto-generated by Axiom CSC\nrules:\n  - concept: " + entity + "\n    op: lte\n    value: ???\n    action_on_fail: BLOCK\n"
+        print("\n  \033[32m-> Schema stub:\033[0m" + stub)
+        print("  Edit .axiom/invariants.yaml, then retry.\n")
+        sys.exit(1)
+    else:
+        print("\n  \033[91m-> Execution blocked.\033[0m")
+        print("  Add rule for '\033[33m" + rule + "\033[0m' to .axiom/invariants.yaml\n")
+        sys.exit(1)
 
 def main():
+    start = time.monotonic()
     try:
-        tool_input = json.loads(sys.stdin.read())
+        payload = json.load(sys.stdin)
     except Exception:
         sys.exit(0)
-    tool_name = tool_input.get("tool", "")
-    if tool_name not in ("Bash", "Edit", "Write", "MultiEdit"):
+
+    tool_name = payload.get("tool_name", "")
+    if tool_name not in INTERCEPTED_TOOLS:
         sys.exit(0)
-    parts = []
-    for key in ("command", "new_string", "content", "description"):
-        v = tool_input.get("input", {}).get(key, "")
-        if v: parts.append(str(v))
-    context = " ".join(parts)
+
+    tool_input = payload.get("tool_input", {})
+    context = get_context(tool_input)
     if not context.strip():
         sys.exit(0)
+
+    exit_code, output = run_pipeline(context)
+    elapsed_ms = (time.monotonic() - start) * 1000
+
     state = load_state()
-    t0 = time.monotonic()
-    r = subprocess.run([sys.executable, LOWERER, "--input", context, "--out", AST_OUT], capture_output=True)
-    if r.returncode != 0:
-        sys.exit(0)
-    r2 = subprocess.run([sys.executable, SOLVER, "--ast", AST_OUT, "--rules", RULES], capture_output=True, text=True)
-    ms = round((time.monotonic() - t0) * 1000, 3)
-    state["last_eval_ms"] = ms
-    if r2.returncode in (1, 2):
-        state["blocked_attempts"] += 1
-        save_state(state)
-        print(r2.stdout.strip(), file=sys.stderr)
-        label = "BLOCKED" if r2.returncode == 1 else "HALTED"
-        print(f"[Axiom Hook] {label} ({ms}ms)", file=sys.stderr)
-        sys.exit(1)
+    state["last_eval_ms"] = round(elapsed_ms, 3)
+    if exit_code != 0:
+        state["blocked_attempts"] = state.get("blocked_attempts", 0) + 1
     save_state(state)
+
+    if exit_code == 1:
+        entity, rule = parse_violation(output)
+        interactive_halt(entity, rule, context)
+    elif exit_code == 2:
+        print("\n\033[33m[AXIOM CSC]\033[0m Constraint requires clarification before proceeding.")
+        print("  " + output.strip()[:200] + "\n")
+        sys.exit(1)
+
     sys.exit(0)
 
 if __name__ == "__main__":
