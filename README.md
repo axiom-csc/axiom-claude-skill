@@ -5,6 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blue)](https://claude.ai/code)
 
+![Axiom CSC Demo](demo/demo.gif)
+
+
 LLMs hallucinate on hard constraints. Claude will pick `role = "admin"` and assume it means full database access. It will invent a `$9,999` payment limit that fits no real policy. It will write `LIMIT 1000` on a query that should cap at 50 rows.
 
 Axiom CSC is the Claude Code skill that makes this impossible.
