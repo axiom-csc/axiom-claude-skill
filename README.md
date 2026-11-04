@@ -1,55 +1,63 @@
 # axiom-claude-skill
 
-> Bring deterministic constraint enforcement to your Claude Code workflow in one command.
+> Bring deterministic constraint enforcement to your Claude Code workflow.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blue)](https://claude.ai/code)
+
+LLMs fail on hard rules. Statistical next-token prediction cannot guarantee a `$10,000` limit is never exceeded. This skill enforces it.
+
+Install Axiom Core's Continuous Structural Compiler as a local Claude Code skill. Claude runs every task through a **Noema → Lemma → Manam** pipeline — extracting typed entities, evaluating them against hard invariants, and failing closed on ambiguity — before producing any output.
 
 ## Install
 
-    curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/main/install.sh | bash
+```bash
+curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/main/install.sh | bash
+```
 
-Requires Claude Code CLI.
+Requires [Claude Code](https://claude.ai/code).
 
 ## What it does
 
-Once installed, Claude runs every code change and logic path through a three-pass evaluation pipeline before producing output.
+| Pass | Component | Role |
+|------|-----------|------|
+| 1 | **Noema** | Extracts typed Base Entities from task context |
+| 2 | **Lemma** | Runs deterministic CPU solver against hard invariants |
+| 3 | **Manam** | Enforces 3-state logic: TRUE / FALSE / UNKNOWN |
 
-Pass 1 - Noema: Extracts typed Base Entities from task context
-Pass 2 - Lemma: Evaluates entities against hard logical invariants  
-Pass 3 - Manam: Enforces 3-state logic: TRUE / FALSE / UNKNOWN
+On **UNKNOWN**, Claude halts and asks exactly the right question instead of guessing.  
+On **FALSE**, Claude outputs an `AxiomConstraintViolation` and stops.
 
-On UNKNOWN, Claude halts and asks exactly the right question instead of guessing.
+## Demo
 
 ## Modes
 
-STRICT (default): Fail-closed on any UNKNOWN, halts and asks
-AUDIT [AXIOM: AUDIT]: Executes normally, appends telemetry block
-REPAIR [AXIOM: REPAIR]: Auto-rewrites violating code before output
+Add to any prompt to activate:
 
-## Example
+| Mode | Tag | Behavior |
+|------|-----|----------|
+| STRICT | _(default)_ | Fail-closed on any UNKNOWN or violation |
+| AUDIT | `[AXIOM: AUDIT]` | Execute + append telemetry block |
+| REPAIR | `[AXIOM: REPAIR]` | Auto-rewrite violating code before output |
 
-    [AXIOM: AUDIT] Refactor the payment processing function to handle amounts over $10,000.
+## Custom Rules
 
-Claude extracts payment_amount, evaluates it against declared limits, then either proceeds with a telemetry summary or halts with a targeted question.
+Create `.axiom/invariants.yaml` in your project root:
 
-AUDIT output:
-
-    --- AXIOM TELEMETRY ---
-    Entities extracted : 3
-    Lemma violations   : 1
-    Unknown states     : 0
-    Disposition        : BLOCK
-    -----------------------
-
-## Manual install
-
-    mkdir -p .claude/skills/axiom-csc
-    curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/main/.claude/skills/axiom-csc/SKILL.md -o .claude/skills/axiom-csc/SKILL.md
+```yaml
+rules:
+  - field: transaction_value
+    op: lte
+    value: 50000
+  - field: percentage_value
+    op: lte
+    value: 100
+```
 
 ## Engine
 
-This skill is a lightweight adaptation of Axiom Core (https://github.com/axiom-csc/axiom-core) — a Python rule-verification engine with deterministic graph evaluation running at ~0.09ms p50 on commodity CPU.
-
-The skill brings the Noema/Lemma/Manam architecture into Claude Code as a native skill, with no binary or server required.
+This skill wraps [axiom-csc/axiom-core](https://github.com/axiom-csc/axiom-core) — a Python rule-verification engine with deterministic graph evaluation running at ~0.09ms p50 on commodity CPU.
 
 ## License
 
-MIT - Axiom CSC (https://github.com/axiom-csc)
+MIT · [Axiom CSC](https://github.com/axiom-csc)
