@@ -1,50 +1,54 @@
 ---
 name: axiom-csc
-description: Continuous Structural Compiler for deterministic AI state execution. Enforces Tri-State logic invariants on Claude Code workflows.
+description: Stop Claude from guessing your security, auth, and system constraints. Deterministic Tri-State guardrails for Claude Code across any domain.
 ---
 
 # Axiom Core: Continuous Structural Compiler (CSC)
 
-Act as the Axiom Core Continuous Structural Compiler. Before proposing any code change, data operation, or logic path, run the full three-pass evaluation pipeline.
+Before proposing any code change, data operation, or logic path — run the full three-pass evaluation pipeline. Do NOT rely on statistical guesswork for hard constraints.
 
 ## Operational Modes
 
-- **STRICT** (default): Fail-closed on any UNKNOWN. Halt immediately, output a targeted micro-query, do not proceed.
-- **AUDIT**: Execute normally, but append a telemetry block at the end showing extracted Base Entities and their truth states.
-- **REPAIR**: If a rule violation is detected in a proposed code block, auto-rewrite the violating block before displaying output.
+- **STRICT** (default): Fail-closed on any UNKNOWN. Halt and ask. Never proceed.
+- **AUDIT**: Execute normally, append telemetry block showing every extracted entity and its disposition.
+- **REPAIR**: Detect violations in a proposed code block, auto-rewrite before output.
 
-Activate a mode by including it in your prompt: `[AXIOM: AUDIT]` or `[AXIOM: REPAIR]`.
+Activate: include `[AXIOM: AUDIT]` or `[AXIOM: REPAIR]` in your prompt.
 
-## Pass 1 — Noema (AST Lowering & Base Entity Extraction)
+## Pass 1 — Noema (Multi-Domain AST Lowering)
 
-Before writing or modifying code, extract all operational variables into typed Base Entities: `(id, concept, value, type)`.
+Extract all operational variables into typed Base Entities: `(id, concept, value, type)`.
 
-Run the AST lowerer:
+Domains: auth roles, payment values, rate limits, file sizes, DB row limits, API quotas, timeouts, retry counts.
+
 ```bash
 python3 .claude/skills/axiom-csc/scripts/lower_ast.py --input "$TASK_CONTEXT"
 ```
 
-Discard ambiguous text assumptions. Isolate only explicit, concrete domain variables.
-
 ## Pass 2 — Lemma (Relational Logic Solver)
 
-Evaluate extracted Base Entities against hard logical invariants: security parameters, array bounds, transaction limits, access constraints.
+Evaluate extracted Base Entities against `.axiom/invariants.yaml` deterministically.
 
-Run the relational solver:
 ```bash
-python3 .claude/skills/axiom-csc/scripts/eval_lemma.py --ast ast.json
+python3 .claude/skills/axiom-csc/scripts/eval_lemma.py --ast ast.json --rules .axiom/invariants.yaml
 ```
 
-If `eval_lemma.py` exits with status 1, halt execution immediately. Output the returned `AxiomConstraintViolation` naming the failing parameter and its actual value. Do not use statistical likelihood on binary logic boundaries.
+- Exit 0 → ALLOW
+- Exit 1 → BLOCK (output AxiomConstraintViolation, halt)
+- Exit 2 → ASK (output targeted micro-query, halt)
 
 ## Pass 3 — Manam (Tri-State Epistemic Controller)
 
 Maintain strict 3-State Logic: `TRUE | FALSE | UNKNOWN`.
 
-If a required Base Entity cannot be extracted from context, mark state as UNKNOWN.
+On UNKNOWN: halt, issue one precise question naming the exact missing variable. Never guess.
 
-**Fail-Closed Guarantee (STRICT mode):** On UNKNOWN, halt execution immediately and output a single targeted micro-query identifying the exact missing variable. Do not guess. Do not proceed.
+## First-time setup
+
+```bash
+python3 .claude/skills/axiom-csc/scripts/axiom_init.py .
+```
+
+Scans your workspace and generates `.axiom/invariants.yaml` automatically.
 
 ## Output Format (AUDIT mode)
-
-After completing a task, append:
