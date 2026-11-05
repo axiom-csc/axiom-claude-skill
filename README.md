@@ -117,7 +117,7 @@ rules:
 
 ## Engine
 
-Powered by [axiom-csc/axiom-core](https://github.com/axiom-csc/axiom-core) — deterministic graph evaluation at ~0.09ms p50.
+Built by [Axiom Labs](https://github.com/axiom-csc).
 
 ## Contributing
 
