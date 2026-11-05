@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-SKILL_VERSION = "1.1.0"
+SKILL_VERSION = "1.2.1"
 
 # Versions of Claude Code this hook has been tested against (major version numbers).
 # If CLAUDE_CODE_VERSION is set and outside this range a warning is printed to stderr.

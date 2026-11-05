@@ -4,6 +4,7 @@ import json, re, argparse, pathlib, sys
 
 PATTERNS = [
     ("transaction_value", r'\$([0-9,]+(?:\.[0-9]{2})?)', "currency_usd", float),
+    ("transaction_value", r'(?:max_?transaction|transaction_?(?:limit|cap|value|amount)|max_?(?:payment|charge|amount))\s*[=:]\s*(\d[\d,]*(?:\.\d+)?)', "assignment", float),
     ("rate_limit_rpm",    r'(\d+)\s*(?:req|requests|calls)\s*/\s*min', "rate_rpm", float),
     ("rate_limit_rps",    r'(\d+)\s*(?:req|requests|calls)\s*/\s*sec', "rate_rps", float),
     ("rate_limit_rpd",    r'(\d+)\s*(?:req|requests|calls)\s*/\s*day', "rate_rpd", float),

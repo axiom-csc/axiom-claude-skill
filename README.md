@@ -39,15 +39,15 @@ Axiom is a local guardrail for AI coding agents. It runs as a pre-write hook in 
 
 ```bash
 # Project-level (recommended)
-curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/v1.2.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/v1.2.1/install.sh | bash
 
 # Global — all projects on this machine
-curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/v1.2.0/install.sh | bash -s -- --global
+curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/v1.2.1/install.sh | bash -s -- --global
 ```
 
 That's it. The installer downloads the hook, registers it in `.claude/settings.json`, and generates `.axiom/invariants.yaml` from your codebase — all in one step. Axiom runs automatically in every Claude Code and Cursor session from this point on.
 
-**Why `curl | bash` is safe here:** The installer is a bash script that downloads 6 Python files and registers a hook in `.claude/settings.json`. It makes no network calls after install, never runs as root, and writes only to your project directory (or `~/.claude/` with `--global`). Read it: https://github.com/axiom-csc/axiom-claude-skill/blob/v1.2.0/install.sh
+**Why `curl | bash` is safe here:** The installer is a bash script that downloads 6 Python files and registers a hook in `.claude/settings.json`. It makes no network calls after install, never runs as root, and writes only to your project directory (or `~/.claude/` with `--global`). Read it: https://github.com/axiom-csc/axiom-claude-skill/blob/v1.2.1/install.sh
 
 For additional agents:
 

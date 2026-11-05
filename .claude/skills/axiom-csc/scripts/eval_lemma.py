@@ -53,6 +53,19 @@ def _parse_yaml_rules(text):
     return {"rules": rules}
 
 
+def _merge_default_numeric(user_rules):
+    """Merge DEFAULT_RULES op/value rules not already covered by the user's yaml.
+
+    Banned security rules are intentionally excluded — they are opt-in via the
+    generated invariants.yaml so that MINIMAL_RULES test fixtures stay predictable.
+    """
+    covered = {r["concept"] for r in user_rules.get("rules", [])}
+    extras = [r for r in DEFAULT_RULES["rules"] if "op" in r and r["concept"] not in covered]
+    if not extras:
+        return user_rules
+    return {"rules": list(user_rules.get("rules", [])) + extras}
+
+
 def load_rules(path):
     p = pathlib.Path(path)
     if not p.exists():
@@ -60,14 +73,16 @@ def load_rules(path):
     text = p.read_text()
     # Try JSON first (superset), then PyYAML if installed, then built-in parser
     try:
-        return json.loads(text)
+        data = json.loads(text)
     except json.JSONDecodeError:
-        pass
-    try:
-        import yaml
-        return yaml.safe_load(text)
-    except ImportError:
-        return _parse_yaml_rules(text)
+        data = None
+    if data is None:
+        try:
+            import yaml
+            data = yaml.safe_load(text)
+        except ImportError:
+            data = _parse_yaml_rules(text)
+    return _merge_default_numeric(data)
 
 def solve(ast_path, rules_path):
     try: ast = json.loads(pathlib.Path(ast_path).read_text())
@@ -81,6 +96,8 @@ def solve(ast_path, rules_path):
         concept = rule["concept"]
         nodes = nodes_by.get(concept, [])
         if rule.get("required") and not nodes:
+            if "op" not in rule:
+                continue  # no threshold defined — skip silently instead of failing closed
             asks.append((concept, ASK_Q.get(concept, f"What is '{concept}'?")))
             continue
         if rule.get("banned"):

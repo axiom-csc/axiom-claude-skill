@@ -4,7 +4,7 @@
 import pathlib, re, sys
 
 SCAN_EXT = {".py", ".ts", ".js", ".yaml", ".yml", ".json", ".env", ".toml", ".cfg"}
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "dist", "build"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "dist", "build", ".claude"}
 
 HEURISTICS = [
     ("transaction_value",  "payments",      r'(?:max|limit|cap).*?(?:amount|price|cost|invoice)[^\n]*?(\d[\d,]*(?:\.\d{2})?)', "max", 10000, "BLOCK"),
@@ -53,26 +53,30 @@ def gen_yaml(findings):
             lines.append(f"    value: {info['value']}")
             lines.append(f"    action_on_fail: BLOCK")
         lines.append("")
-    # Security rules (always active via DEFAULT_RULES; uncomment to override)
+    # Security rules — always active
     lines += [
-        "  # Security rules — active by default via DEFAULT_RULES even if commented out here.",
-        "  # Uncomment to pin or override a specific action:",
-        "  # - concept: dangerous_bash",
-        "  #   banned: true",
-        "  #   action_on_fail: BLOCK",
-        "  # - concept: secret_pattern",
-        "  #   banned: true",
-        "  #   action_on_fail: BLOCK",
-        "  # - concept: auth_hardcoded_id",
-        "  #   banned: true",
-        "  #   action_on_fail: BLOCK",
-        "  # - concept: dep_confusion",
-        "  #   banned: true",
-        "  #   action_on_fail: BLOCK",
-        "  # Auth clarification rule, e.g.:",
-        "  # - concept: role_assignment",
-        "  #   required: true",
-        "  #   action_on_missing: ASK",
+        "  # Security rules — always active",
+        "  - concept: dangerous_bash",
+        "    banned: true",
+        "    action_on_fail: BLOCK",
+        "  - concept: secret_pattern",
+        "    banned: true",
+        "    action_on_fail: BLOCK",
+        "  - concept: auth_hardcoded_id",
+        "    banned: true",
+        "    action_on_fail: BLOCK",
+        "  - concept: auth_uncond_return",
+        "    banned: true",
+        "    action_on_fail: BLOCK",
+        "  - concept: auth_role_literal",
+        "    banned: true",
+        "    action_on_fail: BLOCK",
+        "  - concept: auth_commented_check",
+        "    banned: true",
+        "    action_on_fail: BLOCK",
+        "  - concept: dep_confusion",
+        "    banned: true",
+        "    action_on_fail: BLOCK",
     ]
     return "\n".join(lines)
 
