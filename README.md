@@ -38,7 +38,7 @@ Axiom is a local guardrail for AI coding agents. It runs as a pre-write hook in 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/v1.0.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/v1.1.0/install.sh | bash
 ```
 
 Then run zero-touch setup in your project root:
