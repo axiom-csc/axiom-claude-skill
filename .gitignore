@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.axiom/ast.json
+.axiom/state.json
+.axiom/audit.log
+.axiom/local_log.jsonl

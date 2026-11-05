@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import ast as _ast
 import json, re, argparse, pathlib, sys
 
 PATTERNS = [
@@ -16,6 +17,25 @@ PATTERNS = [
     ("retry_count",       r'(?:retries?|retry)\s*[:=]?\s*(\d+)', "count", int),
 ]
 
+AUTH_DIRS = {"auth", "middleware", "permissions", "roles"}
+DEP_FILES = {"requirements.txt", "package.json", "pyproject.toml", "go.mod"}
+
+KNOWN_PACKAGES = {
+    "requests", "numpy", "flask", "django", "express", "react", "lodash", "axios",
+    "pandas", "pytest", "fastapi", "uvicorn", "pillow", "typescript", "vue", "jest",
+}
+
+SECRET_PATTERNS = [
+    r'AKIA[0-9A-Z]{16}',
+    r'(?:aws_secret_access_key|AWS_SECRET)[^\n]*?["\']([A-Za-z0-9/+=]{40})["\']',
+    r'sk_live_[a-zA-Z0-9]+',
+    r'sk_test_[a-zA-Z0-9]+',
+    r'sk-[A-Za-z0-9]{48}',
+    r'-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----',
+    r'(?:password|passwd|secret|api_key)\s*=\s*["\'][^"\'${\s]{4,}["\']',
+]
+
+
 def extract(text):
     entities, seen = [], set()
     for concept, pattern, type_label, cast in PATTERNS:
@@ -29,12 +49,206 @@ def extract(text):
             entities.append({"id": f"ent_{concept}_{len(entities)}", "concept": concept, "value": val, "type": type_label, "source": m.group(0).strip()})
     return entities
 
+
+def _in_auth_path(file_path):
+    if not file_path:
+        return False
+    parts = set(pathlib.Path(file_path).parts)
+    return bool(parts & AUTH_DIRS)
+
+
+def _levenshtein(a, b):
+    if a == b: return 0
+    if len(a) < len(b): a, b = b, a
+    if not b: return len(a)
+    prev = list(range(len(b) + 1))
+    for ca in a:
+        curr = [prev[0] + 1]
+        for j, cb in enumerate(b):
+            curr.append(min(prev[j] + (ca != cb), prev[j + 1] + 1, curr[j] + 1))
+        prev = curr
+    return prev[-1]
+
+
+def _ast_extract_auth_violations(text):
+    """Use Python's ast module to detect auth bypass patterns structurally.
+
+    Catches obfuscated spacing (user . id == 1) and simple variable aliases
+    (uid = user.id; if uid == 1:) that regex cannot reliably detect.
+    Returns a list of entity dicts — empty on SyntaxError or non-Python content.
+    """
+    try:
+        tree = _ast.parse(text)
+    except SyntaxError:
+        return []
+
+    entities = []
+    _USER_ROOTS = {"user", "current_user", "request_user"}
+
+    # Pass 1: collect assignment aliases like `uid = user.id`
+    id_aliases = {"user_id", "userid"}
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Assign):
+            for target in node.targets:
+                if isinstance(target, _ast.Name) and isinstance(node.value, _ast.Attribute):
+                    attr = node.value
+                    if (isinstance(attr.value, _ast.Name) and
+                            attr.attr == "id" and
+                            attr.value.id in _USER_ROOTS):
+                        id_aliases.add(target.id)
+
+    def _is_id_node(n):
+        if isinstance(n, _ast.Attribute):
+            return (isinstance(n.value, _ast.Name) and
+                    n.attr == "id" and n.value.id in _USER_ROOTS)
+        if isinstance(n, _ast.Name):
+            return n.id in id_aliases
+        return False
+
+    # Pass 2: flag comparisons like `user.id == 1` or `uid == 1`
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Compare) and _is_id_node(node.left):
+            for cmp in node.comparators:
+                if isinstance(cmp, _ast.Constant) and isinstance(cmp.value, int):
+                    entities.append({
+                        "id": f"auth_hid_{len(entities)}", "concept": "auth_hardcoded_id",
+                        "value": 1, "type": "auth_violation",
+                        "source": f"id comparison to literal {cmp.value}",
+                    })
+
+    # Pass 3: flag `if <trivial_literal>: return True`
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.If):
+            has_return_true = any(
+                isinstance(s, _ast.Return) and
+                isinstance(s.value, _ast.Constant) and s.value.value is True
+                for s in node.body
+            )
+            if has_return_true:
+                test = node.test
+                is_trivial = (
+                    isinstance(test, _ast.Constant) and test.value in (True, 1)
+                )
+                if is_trivial:
+                    entities.append({
+                        "id": f"auth_ucr_{len(entities)}", "concept": "auth_uncond_return",
+                        "value": 1, "type": "auth_violation",
+                        "source": "if <trivial>: return True",
+                    })
+
+    return entities
+
+
+def extract_auth_patterns(text, file_path):
+    """Flag suspicious auth patterns in auth-related files."""
+    if not _in_auth_path(file_path):
+        return []
+    entities = []
+
+    # auth_hardcoded_id and auth_uncond_return: AST-based (catches obfuscated spacing + aliases)
+    entities.extend(_ast_extract_auth_violations(text))
+
+    # Role string literals: "admin", "superuser", "root" in non-config .py files
+    fname = pathlib.Path(file_path).name.lower()
+    if fname.endswith('.py') and 'config' not in fname and 'setting' not in fname:
+        for m in re.finditer(r'["\'](?:admin|superuser|root)["\']', text, re.IGNORECASE):
+            entities.append({"id": f"auth_rol_{len(entities)}", "concept": "auth_role_literal",
+                             "value": 1, "type": "auth_violation", "source": m.group(0).strip()})
+
+    # Commented-out auth checks: # line containing auth/permission/role/check
+    for m in re.finditer(r'#[^\n]*(?:auth|permission|role|check)[^\n]*', text, re.IGNORECASE):
+        entities.append({"id": f"auth_cmt_{len(entities)}", "concept": "auth_commented_check",
+                         "value": 1, "type": "auth_violation", "source": m.group(0).strip()[:80]})
+
+    return entities
+
+
+def extract_dangerous_bash(text, tool_name):
+    """Flag dangerous shell patterns in Bash tool calls."""
+    if tool_name.lower() != "bash":
+        return []
+    entities = []
+    patterns = [
+        r'(?:DROP\s+(?:TABLE|COLUMN|CONSTRAINT)|TRUNCATE\s+TABLE|ALTER\s+TABLE\s+\S+\s+DROP)',
+        r'rm\s+-[^\s]*r[^\s]*\s+(?!/tmp|/var/tmp)\S+',
+        r'curl\s+[^\|\n]+\|\s*(?:bash|sh)\b',
+        r'wget\s+[^\|\n]+\|\s*(?:bash|sh)\b',
+        r'(?:>|>>|tee\s+)\.claude/settings\.json',
+        r'(?:>|>>|tee\s+)\.axiom/',
+    ]
+    for pat in patterns:
+        for m in re.finditer(pat, text, re.IGNORECASE):
+            entities.append({"id": f"dbash_{len(entities)}", "concept": "dangerous_bash",
+                             "value": 1, "type": "dangerous_command", "source": m.group(0).strip()[:80]})
+    return entities
+
+
+def extract_secret_patterns(text, tool_name):
+    """Flag secret/credential patterns in file writes."""
+    if tool_name.lower() not in ("write", "edit", "multiedit", "notebookedit"):
+        return []
+    entities = []
+    for pat in SECRET_PATTERNS:
+        for m in re.finditer(pat, text, re.IGNORECASE):
+            entities.append({"id": f"sec_{len(entities)}", "concept": "secret_pattern",
+                             "value": 1, "type": "credential", "source": m.group(0).strip()[:40]})
+    return entities
+
+
+def extract_dep_confusion(text, file_path):
+    """Flag close misspellings of known packages in dependency files."""
+    fname = pathlib.Path(file_path).name.lower() if file_path else ""
+    if fname not in DEP_FILES:
+        return []
+    entities = []
+    candidates = set()
+    if fname == "requirements.txt":
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            pkg = re.split(r'[><=!;@\s\[]', line)[0].strip().lower()
+            if pkg:
+                candidates.add(pkg)
+    elif fname == "package.json":
+        for m in re.finditer(r'"([a-zA-Z0-9@/_-]+)"\s*:', text):
+            pkg = m.group(1).lstrip('@').lower()
+            if pkg:
+                candidates.add(pkg)
+    elif fname in ("pyproject.toml", "go.mod"):
+        for m in re.finditer(r'["\']?([a-zA-Z][a-zA-Z0-9_-]+)["\']?\s*[><=!]', text):
+            candidates.add(m.group(1).lower())
+
+    for pkg in candidates:
+        if pkg in KNOWN_PACKAGES:
+            continue
+        for known in KNOWN_PACKAGES:
+            if abs(len(pkg) - len(known)) > 2:
+                continue
+            dist = _levenshtein(pkg, known)
+            threshold = 1 if len(known) <= 5 else 2
+            if 0 < dist <= threshold:
+                entities.append({
+                    "id": f"dep_{len(entities)}", "concept": "dep_confusion",
+                    "value": 1, "type": "dep_typosquatt",
+                    "source": f"{pkg!r} ~= {known!r} (dist={dist})",
+                })
+                break
+    return entities
+
+
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--input", required=True)
     p.add_argument("--out", default="ast.json")
+    p.add_argument("--tool-name", default="")
+    p.add_argument("--file-path", default="")
     args = p.parse_args()
     nodes = extract(args.input)
+    nodes += extract_auth_patterns(args.input, args.file_path)
+    nodes += extract_dangerous_bash(args.input, args.tool_name)
+    nodes += extract_secret_patterns(args.input, args.tool_name)
+    nodes += extract_dep_confusion(args.input, args.file_path)
     pathlib.Path(args.out).write_text(json.dumps({"nodes": nodes}, indent=2))
     for n in nodes: print(f"[Noema]  {n['concept']} = {n['value']} ({n['type']})")
     print(f"[Noema]  {len(nodes)} Base Entities -> {args.out}")

@@ -9,7 +9,7 @@ compatibility: claude-code
 
 Before proposing any code change, data operation, or logic path, run the full three-pass evaluation pipeline. Do NOT rely on statistical guesswork for hard constraints.
 
-**PreToolUse hook:** `.claude/skills/axiom-csc/hooks/pre_tool_use.py` intercepts Bash and file-edit commands before execution. Checks run in <0.1ms against `.axiom/invariants.yaml`.
+**PreToolUse hook:** `.claude/skills/axiom-csc/hooks/pre_tool_use.py` intercepts Bash and file-edit commands before execution. Checks run against `.axiom/invariants.yaml`.
 
 **First-time setup:** If `.axiom/invariants.yaml` does not exist, run:
 ```bash

@@ -1,0 +1,9 @@
+title = "Axiom CSC gitleaks configuration"
+
+# These are intentionally fake keys used as test vectors for the
+# secret-detection tests. They are not real credentials.
+[allowlist]
+description = "Test-vector fake keys in test suite"
+paths = [
+    '''tests/''',
+]
