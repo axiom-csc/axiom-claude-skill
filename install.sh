@@ -2,7 +2,7 @@
 set -e
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 
-AXIOM_VERSION="v1.1.0"
+AXIOM_VERSION="v1.2.0"
 REPO_BASE="https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/${AXIOM_VERSION}/.claude/skills/axiom-csc"
 
 # ── Argument parsing ───────────────────────────────────────────────────────
@@ -199,13 +199,42 @@ PYEOF
   fi
 fi
 
+# ── Auto-generate invariants (project mode only) ───────────────────────────
+RULES_COUNT=0
+INIT_NOTE=""
+if [[ "$GLOBAL_MODE" == "false" ]]; then
+  INIT_OUT=$(python3 "$SKILL_DIR/scripts/axiom_init.py" . 2>&1) && {
+    # Count rules generated
+    RULES_COUNT=$(python3 -c "
+import pathlib, sys
+try:
+    import re
+    text = pathlib.Path('.axiom/invariants.yaml').read_text()
+    print(len(re.findall(r'^  - concept:', text, re.MULTILINE)))
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+  } || {
+    INIT_NOTE="ℹ  Run \`python3 $SKILL_DIR/scripts/axiom_init.py .\` to generate rules from your codebase."
+  }
+fi
+
+# ── Summary ────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${GREEN}✓ Axiom armed. Protected against 5 agent failure domains.${NC}"
-echo -e "${YELLOW}Next steps:"
-echo -e "  1. python3 $SKILL_DIR/scripts/axiom_init.py .   (generate .axiom/invariants.yaml)"
-echo -e "  2. python3 $SKILL_DIR/scripts/axiom.py telemetry status"
-echo -e "  To uninstall: bash install.sh uninstall"
-echo -e "  Other agents:  bash install.sh --agents=cursor,vscode${NC}"
+SETTINGS_SHORT="$SETTINGS_FILE"
+[[ "$SETTINGS_FILE" == "$HOME"* ]] && SETTINGS_SHORT="~${SETTINGS_FILE#$HOME}"
+echo -e "${GREEN}  ✓ Hook registered in ${SETTINGS_SHORT}${NC}"
+if [[ "$GLOBAL_MODE" == "false" && -z "$INIT_NOTE" ]]; then
+  echo -e "${GREEN}  ✓ .axiom/invariants.yaml generated (${RULES_COUNT} rules)${NC}"
+fi
+echo -e "${GREEN}  ✓ Axiom ${AXIOM_VERSION} armed — protecting 5 failure domains${NC}"
+echo ""
+if [[ -n "$INIT_NOTE" ]]; then
+  echo -e "${YELLOW}  ${INIT_NOTE}${NC}"
+  echo ""
+fi
+echo "  Test it: ask Claude to set a payment limit above your ceiling."
+echo "  Docs:    https://github.com/axiom-csc/axiom-claude-skill"
 echo ""
 echo "Found a bypass? Open an issue: https://github.com/axiom-csc/axiom-claude-skill/issues"
 echo "Built something with it? Drop a star: https://github.com/axiom-csc/axiom-claude-skill"

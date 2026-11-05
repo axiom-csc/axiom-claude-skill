@@ -38,22 +38,22 @@ Axiom is a local guardrail for AI coding agents. It runs as a pre-write hook in 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/v1.1.0/install.sh | bash
+# Project-level (recommended)
+curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/v1.2.0/install.sh | bash
+
+# Global — all projects on this machine
+curl -fsSL https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/v1.2.0/install.sh | bash -s -- --global
 ```
 
-Then run zero-touch setup in your project root:
+That's it. The installer downloads the hook, registers it in `.claude/settings.json`, and generates `.axiom/invariants.yaml` from your codebase — all in one step. Axiom runs automatically in every Claude Code and Cursor session from this point on.
 
-```bash
-python3 .claude/skills/axiom-csc/scripts/axiom_init.py .
-```
-
-Scans your codebase — OpenAPI specs, Pydantic models, env files — and generates `.axiom/invariants.yaml` automatically.
+**Why `curl | bash` is safe here:** The installer is a bash script that downloads 6 Python files and registers a hook in `.claude/settings.json`. It makes no network calls after install, never runs as root, and writes only to your project directory (or `~/.claude/` with `--global`). Read it: https://github.com/axiom-csc/axiom-claude-skill/blob/v1.2.0/install.sh
 
 For additional agents:
 
 ```bash
-bash install.sh --agents=cursor          # Claude Code + Cursor
-bash install.sh --agents=cursor,vscode   # Claude Code + Cursor + VS Code
+curl -fsSL .../install.sh | bash -s -- --agents=cursor          # Claude Code + Cursor
+curl -fsSL .../install.sh | bash -s -- --agents=cursor,vscode   # + VS Code file-save task
 ```
 
 ## Uninstall
@@ -243,6 +243,12 @@ Or set `"telemetry": false` in `~/.config/axiom-csc/config.json`.
 `axiom report` is always **manual**: you pick the case, review the redacted payload, and explicitly type `yes` to submit. Reports become public GitHub issues under CC-BY-4.0.
 
 See [PRIVACY.md](PRIVACY.md) for full details.
+
+## FAQ
+
+**Q: Why not use Claude Code's plugin marketplace?**
+
+Claude Code's plugin marketplace distributes MCP servers and slash-command skills — it does not currently support PreToolUse hooks, which is the hook type this tool requires to block before a write happens. Installing via this script is the only supported path until Anthropic adds marketplace support for hooks. When they do, we'll publish there.
 
 ## Contributing
 
