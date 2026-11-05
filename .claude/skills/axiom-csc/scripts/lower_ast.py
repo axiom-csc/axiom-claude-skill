@@ -168,6 +168,9 @@ def extract_dangerous_bash(text, tool_name):
     """Flag dangerous shell patterns in Bash tool calls."""
     if tool_name.lower() != "bash":
         return []
+    # git subcommands don't execute their string arguments (e.g. -m "...") as shell
+    if re.match(r'\s*git\s+', text):
+        return []
     entities = []
     patterns = [
         r'(?:DROP\s+(?:TABLE|COLUMN|CONSTRAINT)|TRUNCATE\s+TABLE|ALTER\s+TABLE\s+\S+\s+DROP)',

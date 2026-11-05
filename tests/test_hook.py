@@ -238,6 +238,26 @@ class HookSecurityTests(unittest.TestCase):
         self.assertEqual(self._decision(out), "deny",
                          f"rm -rf on non-tmp path must DENY: {out}")
 
+    # B4. git commit -m with dangerous words in message → ALLOW (string arg, not shell)
+    def test_dangerous_bash_git_commit_msg_allows(self):
+        code, out, stderr = run_hook(
+            "Bash",
+            {"command": "git commit -m \"fix rm -rf bug\""},
+            self.tmp,
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(out, {}, f"git commit -m with 'rm -rf' in message must ALLOW: {out}")
+
+    # B5. git commit -m "rm -rf /" — still a string, still must ALLOW
+    def test_dangerous_bash_git_commit_literal_rm_allows(self):
+        code, out, stderr = run_hook(
+            "Bash",
+            {"command": "git commit -m \"rm -rf /\""},
+            self.tmp,
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(out, {}, f"git commit -m 'rm -rf /' must ALLOW (string, not command): {out}")
+
     # ── C. Secret / credential patterns ───────────────────────────────────
 
     # C1. Stripe live key → DENY
