@@ -4,14 +4,33 @@ GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC
 
 AXIOM_VERSION="v1.0.0"
 REPO_BASE="https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/${AXIOM_VERSION}/.claude/skills/axiom-csc"
-SKILL_DIR=".claude/skills/axiom-csc"
+
+# ── Argument parsing ───────────────────────────────────────────────────────
+GLOBAL_MODE=false
+AGENTS_ARG=""
+for arg in "$@"; do
+  case "$arg" in
+    --global)   GLOBAL_MODE=true ;;
+    --agents=*) AGENTS_ARG="${arg#--agents=}" ;;
+  esac
+done
+
+if [[ "$GLOBAL_MODE" == "true" ]]; then
+  SKILL_DIR="$HOME/.claude/skills/axiom-csc"
+  SETTINGS_FILE="$HOME/.claude/settings.json"
+  HOOK_CMD="python3 $HOME/.claude/skills/axiom-csc/hooks/pre_tool_use.py"
+else
+  SKILL_DIR=".claude/skills/axiom-csc"
+  SETTINGS_FILE=".claude/settings.json"
+  HOOK_CMD="python3 .claude/skills/axiom-csc/hooks/pre_tool_use.py"
+fi
 
 # ── Uninstall ──────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "uninstall" ]]; then
   echo -e "${BLUE}==> Uninstalling Axiom CSC...${NC}"
-  python3 - <<'PYEOF'
-import json, pathlib, sys
-p = pathlib.Path(".claude/settings.json")
+  AXIOM_SETTINGS_FILE="$SETTINGS_FILE" python3 - <<'PYEOF'
+import json, pathlib, os, sys
+p = pathlib.Path(os.environ["AXIOM_SETTINGS_FILE"]).expanduser()
 if p.exists():
     try:
         s = json.loads(p.read_text())
@@ -20,13 +39,13 @@ if p.exists():
         if len(filtered) < len(pre):
             s["hooks"]["PreToolUse"] = filtered
             p.write_text(json.dumps(s, indent=2))
-            print("  Hook entry removed from .claude/settings.json")
+            print(f"  Hook entry removed from {p}")
         else:
-            print("  No axiom-csc entry found in settings.json")
+            print(f"  No axiom-csc entry found in {p}")
     except Exception as e:
-        print(f"  Could not update settings.json: {e}", file=sys.stderr)
+        print(f"  Could not update {p}: {e}", file=sys.stderr)
 else:
-    print("  No .claude/settings.json found")
+    print(f"  No {p} found")
 PYEOF
   if [[ -d "$SKILL_DIR" ]]; then
     rm -rf "$SKILL_DIR"
@@ -50,6 +69,19 @@ python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)" 2>/dev
   exit 1
 }
 
+# ── Project root check ─────────────────────────────────────────────────────
+if [[ "$GLOBAL_MODE" == "false" ]]; then
+  if [[ ! -e ".git" && ! -f "package.json" && ! -f "pyproject.toml" && ! -f "Cargo.toml" ]]; then
+    echo -e "${YELLOW}Warning: This doesn't look like a project root (no .git, package.json, pyproject.toml, or Cargo.toml found).${NC}"
+    echo "Run install.sh from your project directory, or pass --global to install to ~/.claude/settings.json."
+    if [[ -t 0 ]]; then
+      echo ""
+      read -r -p "Continue anyway? [y/N] " _yn
+      [[ "$_yn" =~ ^[Yy]$ ]] || exit 1
+    fi
+  fi
+fi
+
 echo -e "${BLUE}==> Installing Axiom CSC ${AXIOM_VERSION}...${NC}"
 mkdir -p "$SKILL_DIR/scripts" "$SKILL_DIR/references" "$SKILL_DIR/hooks"
 
@@ -63,16 +95,16 @@ curl -fsSL "$REPO_BASE/scripts/axiom_flush.py"        -o "$SKILL_DIR/scripts/axi
 curl -fsSL "$REPO_BASE/references/INVARIANTS_SPEC.md" -o "$SKILL_DIR/references/INVARIANTS_SPEC.md"
 chmod +x "$SKILL_DIR/hooks/"*.py "$SKILL_DIR/scripts/"*.py
 
-# ── Register PreToolUse hook in .claude/settings.json ─────────────────────
-python3 - <<'PYEOF'
-import json, pathlib
-p = pathlib.Path(".claude/settings.json")
+# ── Register PreToolUse hook in settings.json ──────────────────────────────
+AXIOM_SETTINGS_FILE="$SETTINGS_FILE" AXIOM_HOOK_CMD="$HOOK_CMD" python3 - <<'PYEOF'
+import json, pathlib, os
+p = pathlib.Path(os.environ["AXIOM_SETTINGS_FILE"]).expanduser()
 p.parent.mkdir(parents=True, exist_ok=True)
 try:
     s = json.loads(p.read_text()) if p.exists() else {}
 except Exception:
     s = {}
-cmd = "python3 .claude/skills/axiom-csc/hooks/pre_tool_use.py"
+cmd = os.environ["AXIOM_HOOK_CMD"]
 entry = {"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
          "hooks": [{"type": "command", "command": cmd}]}
 h = s.setdefault("hooks", {})
@@ -112,29 +144,24 @@ print(f"  Telemetry: {status}")
 print(f"  Config: {cfg_file}")
 PYEOF
 
-# ── Agent compatibility ────────────────────────────────────────────────────
-# Parse --agents=cursor,vscode from args, or prompt interactively on a TTY.
-AGENTS_ARG=""
-for arg in "$@"; do
-  case "$arg" in --agents=*) AGENTS_ARG="${arg#--agents=}" ;; esac
-done
+# ── Agent compatibility (project mode only) ────────────────────────────────
+if [[ "$GLOBAL_MODE" == "false" ]]; then
+  if [[ -z "$AGENTS_ARG" ]] && [[ -t 0 ]]; then
+    echo ""
+    echo -e "${BLUE}==> Agent compatibility${NC}"
+    echo "Which additional agents do you want to configure?"
+    echo "Options: cursor  vscode  (space-separated, or press Enter to skip)"
+    echo -e "${YELLOW}Default: Claude Code only (non-interactive install always skips):${NC} "
+    read -r AGENTS_ARG || AGENTS_ARG=""
+  fi
 
-if [[ -z "$AGENTS_ARG" ]] && [[ -t 0 ]]; then
-  echo ""
-  echo -e "${BLUE}==> Agent compatibility${NC}"
-  echo "Which additional agents do you want to configure?"
-  echo "Options: cursor  vscode  (space-separated, or press Enter to skip)"
-  echo -e "${YELLOW}Default: Claude Code only (non-interactive install always skips):${NC} "
-  read -r AGENTS_ARG || AGENTS_ARG=""
-fi
-
-if [[ "$AGENTS_ARG" == *"cursor"* ]]; then
-  mkdir -p .cursor
-  python3 - <<'PYEOF'
-import json, pathlib
+  if [[ "$AGENTS_ARG" == *"cursor"* ]]; then
+    mkdir -p .cursor
+    AXIOM_HOOK_CMD="$HOOK_CMD" python3 - <<'PYEOF'
+import json, pathlib, os
 p = pathlib.Path(".cursor/hooks.json")
 p.parent.mkdir(parents=True, exist_ok=True)
-cmd = "python3 .claude/skills/axiom-csc/hooks/pre_tool_use.py"
+cmd = os.environ["AXIOM_HOOK_CMD"]
 entry = {"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
          "hooks": [{"type": "command", "command": cmd}]}
 try:
@@ -146,20 +173,21 @@ s["PreToolUse"] = [e for e in h if "axiom-csc" not in e.get("hooks",[{}])[0].get
 p.write_text(json.dumps(s, indent=2))
 print(f"  Cursor hook registered in {p}")
 PYEOF
-fi
+  fi
 
-if [[ "$AGENTS_ARG" == *"vscode"* ]]; then
-  mkdir -p .vscode
-  python3 - <<'PYEOF'
-import json, pathlib
+  if [[ "$AGENTS_ARG" == *"vscode"* ]]; then
+    mkdir -p .vscode
+    AXIOM_HOOK_CMD="$HOOK_CMD" python3 - <<'PYEOF'
+import json, pathlib, os
 p = pathlib.Path(".vscode/axiom-task.json")
 p.parent.mkdir(parents=True, exist_ok=True)
+cmd = os.environ["AXIOM_HOOK_CMD"]
 task = {
   "version": "2.0.0",
   "tasks": [{
     "label": "axiom-csc: check file on save",
     "type": "shell",
-    "command": "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${file}\",\"content\":\"\"}}' | python3 .claude/skills/axiom-csc/hooks/pre_tool_use.py --stdin",
+    "command": "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${file}\",\"content\":\"\"}}' | " + cmd + " --stdin",
     "presentation": {"reveal": "silent", "panel": "shared"},
     "runOptions": {"runOn": "folderOpen"},
     "problemMatcher": []
@@ -168,6 +196,7 @@ task = {
 p.write_text(json.dumps(task, indent=2))
 print(f"  VS Code task written to {p}")
 PYEOF
+  fi
 fi
 
 echo ""
