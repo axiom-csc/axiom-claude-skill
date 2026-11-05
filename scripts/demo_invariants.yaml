@@ -1,0 +1,5 @@
+rules:
+  - concept: transaction_value
+    op: lte
+    value: 10000
+    action_on_fail: BLOCK
