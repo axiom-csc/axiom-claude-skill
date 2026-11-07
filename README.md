@@ -159,12 +159,12 @@ if user.id == 1:
 | Mode | Trigger | Behavior | Status |
 |------|---------|----------|--------|
 | STRICT | _(default)_ | Halt on any UNKNOWN or violation | Implemented |
-| AUDIT | `[AXIOM: AUDIT]` | Execute + append telemetry block | Planned — prompt tag not yet parsed |
+| AUDIT | `[AXIOM: AUDIT]` anywhere in the tool call | Log the would-be disposition to `.axiom/local_log.jsonl`, pass the call through | Implemented |
 | REPAIR | `[AXIOM: REPAIR]` | Auto-rewrite violations before output | Planned — prompt tag not yet parsed |
 
-Every tool call today is evaluated under STRICT semantics regardless of
-prompt tags; the AUDIT and REPAIR rows above describe the planned surface
-and will be kept in sync as the modes land.
+AUDIT runs the full pipeline, captures what STRICT would have done
+(`allow` / `ask` / `deny`), and lets the call proceed. Use it to shake a
+new rule set into shape without blocking real work.
 
 ## Usage
 

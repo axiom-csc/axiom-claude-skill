@@ -18,14 +18,16 @@ python3 .claude/skills/axiom-csc/scripts/axiom_init.py .
 
 ## Operational Modes
 
-- **STRICT** (default, and currently the only implemented mode): Fail-closed on any UNKNOWN. Halt and ask. Never proceed.
-- **AUDIT** _(planned, not implemented)_: Execute normally, append telemetry block showing every extracted entity and disposition.
-- **REPAIR** _(planned, not implemented)_: Detect violations in a proposed code block, auto-rewrite before output.
-
-The hook does not currently parse `[AXIOM: AUDIT]` or `[AXIOM: REPAIR]`
-markers; every tool call is evaluated under STRICT semantics regardless of
-prompt tags. This section tracks the planned mode surface and will be kept
-in sync as modes land.
+- **STRICT** (default): Fail-closed on any UNKNOWN. Halt and ask. Never proceed.
+- **AUDIT**: Include `[AXIOM: AUDIT]` anywhere in the tool call (e.g. in the
+  `description`, `new_string`, or `content` field). The hook still runs the
+  full pipeline and captures the would-be disposition (`allow` / `ask` /
+  `deny`), but passes the call through and records the audit entry in
+  `.axiom/local_log.jsonl` with `rule_id` prefixed `audit:would_<disposition>`.
+  Use this to shake rules into shape without blocking real work.
+- **REPAIR** _(planned, not implemented)_: Detect violations in a proposed
+  code block, auto-rewrite before output. The `[AXIOM: REPAIR]` prompt tag
+  is not parsed today.
 
 ## Pass 1 - Noema (Multi-Domain AST Lowering)
 

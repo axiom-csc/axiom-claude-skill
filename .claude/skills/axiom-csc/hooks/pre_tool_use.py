@@ -39,6 +39,23 @@ def _check_version_compat() -> None:
         pass
 INTERCEPTED_TOOLS = {"Bash", "Edit", "Write", "MultiEdit", "NotebookEdit"}
 
+# Mode markers — a tool_input value containing one of these flips the
+# hook's disposition for that call. Only AUDIT is implemented today.
+AUDIT_TAG = "[AXIOM: AUDIT]"
+
+
+def detect_mode(tool_input):
+    """Return "AUDIT" if any string value in tool_input carries the AUDIT tag,
+    otherwise "STRICT". The hook does not see the user's prompt directly, so
+    the tag has to ride along in a tool_input field (command, new_string,
+    content, description, …)."""
+    if not isinstance(tool_input, dict):
+        return "STRICT"
+    for v in tool_input.values():
+        if isinstance(v, str) and AUDIT_TAG in v:
+            return "AUDIT"
+    return "STRICT"
+
 # --stdin mode: human-readable stderr + exit codes instead of JSON stdout.
 # Any agent that can pipe JSON tool calls through a subprocess can use this mode.
 STDIN_MODE = "--stdin" in sys.argv
@@ -255,11 +272,29 @@ def main():
         sys.exit(0)
 
     file_path = str(tool_input.get("file_path", tool_input.get("path", "")))
+    mode = detect_mode(tool_input)
     exit_code, output = run_pipeline(context, rules_path, tool_name=tool_name, file_path=file_path)
     elapsed_ms = (time.monotonic() - start) * 1000
 
     state = load_state()
     state["last_eval_ms"] = round(elapsed_ms, 3)
+
+    # AUDIT mode: run the pipeline for its side effects (entity extraction,
+    # decision capture) but always allow the call through. The would-be
+    # disposition is logged to the local log and telemetry so the user can
+    # inspect what STRICT would have done.
+    if mode == "AUDIT":
+        would = {1: "deny", 2: "ask", None: PIPELINE_ERROR_BEHAVIOR}.get(exit_code, "allow")
+        summary = (output or "").strip().replace("\n", "; ")[:400] or "all checks passed"
+        save_state(state)
+        log_audit("AUDIT", f"would_{would}", "audit_mode", context)
+        write_local_log(tool_name, context, "allow", f"audit:would_{would}", summary)
+        record_telemetry("allow", f"audit:would_{would}", tool_name, elapsed_ms)
+        print(
+            f"[axiom-csc] AUDIT ({round(elapsed_ms, 1)}ms) — would have: {would}; {summary}",
+            file=sys.stderr,
+        )
+        sys.exit(0)
 
     if exit_code is None:
         state["pipeline_errors"] = state.get("pipeline_errors", 0) + 1

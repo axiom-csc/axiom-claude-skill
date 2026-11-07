@@ -106,3 +106,34 @@ Flagged for operator decision: implement AUDIT/REPAIR, or delete the
 rows entirely. AUDIT is cheap (already have a decision log and
 telemetry — just surface them on an `[AXIOM: AUDIT]` tag). REPAIR is
 substantial (needs a code-rewriter). Held out of this pass.
+
+### 2026-11-07 — AUDIT mode implemented
+
+Operator chose: implement AUDIT, delete REPAIR.
+
+- `pre_tool_use.py`: new `AUDIT_TAG = "[AXIOM: AUDIT]"` constant and
+  `detect_mode(tool_input)` helper that scans every string value in the
+  tool_input dict. Hook sees tool_input, not the user prompt, so the tag
+  has to ride along in a field like `description`, `new_string`,
+  `content`, or `command`.
+- In `main()` after the pipeline runs: if mode is AUDIT, record the
+  would-be disposition (`allow` / `ask` / `deny` — or the pipeline-error
+  fallback when the pipeline itself failed), write a local-log entry
+  with `decision="allow"` and `rule_id="audit:would_<disposition>"`,
+  record telemetry the same way (kept within the allow/ask/deny
+  allowlist so the telemetry tests stay green), emit a stderr summary,
+  and exit 0.
+- New test file `tests/test_audit_mode.py` with 5 tests covering:
+  STRICT default still denies (regression), AUDIT-tagged violation is
+  allowed, AUDIT-tagged clean call is allowed and logged, tag detection
+  in a non-content field (`description`), local_log.jsonl records the
+  audit disposition.
+- Full suite: 52/52 via `python3 -m unittest discover tests`.
+- `SKILL.md` updated: AUDIT line now describes real behaviour (tag
+  placement, pipeline capture, local log entry format). REPAIR row
+  left as "planned, not implemented" for this commit.
+- `README.md` Modes table: AUDIT row updated to Implemented with
+  concrete behaviour; REPAIR row left as Planned.
+
+REPAIR row deletion follows in the next commit (operator-mandated
+split).
