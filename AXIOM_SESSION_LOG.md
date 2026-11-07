@@ -164,3 +164,25 @@ that point.
   (empty file is removed before the script exits).
 - Behaviour unchanged for the happy path: same files, same chmod,
   same hook registration order.
+
+### 2026-11-07 — privacy audit
+
+Traced every claim in `PRIVACY.md` to the code it rests on. Result:
+`docs/privacy-audit.md` (new doc; establishes the `docs/` directory
+convention since no prior audits existed).
+
+- 17 claims VERIFIED (telemetry opt-in, allowlist, no system
+  identifiers, queue cap, 2s timeout, silent network failure, redactor
+  runs, `$EDITOR` round-trip, `yes`-confirmation, local log gitignore,
+  hook never auto-submits, etc.).
+- 2 claims BROKEN — both doc-wording, not privacy regressions:
+  1. "Events queued locally but never sent" when no endpoint is set —
+     code actually returns before queueing, so nothing is written at
+     all. Code is stronger-privacy than the doc; fix the doc.
+  2. "Payload is submitted as a public GitHub issue" — script only
+     opens a prefilled GitHub `/issues/new` URL via `webbrowser.open`;
+     the user must still click Submit. Doc overstates automation.
+- 1 minor: PRIVACY.md says reports go to "the axiom-csc repository";
+  the actual target is `axiom-csc/axiom-claude-skill`.
+
+Follow-up PRIVACY.md wording fixes committed next.
