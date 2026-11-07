@@ -150,3 +150,17 @@ violation.
 
 If REPAIR is built later, both documents can get the row back at
 that point.
+
+### 2026-11-07 — install.sh hardening
+
+- `set -e` → `set -euo pipefail`: unset-var detection and pipe-failure
+  propagation. Scanned the script for unguarded `$VAR` references;
+  all pre-existing variables are initialised before use (`GLOBAL_MODE`,
+  `AGENTS_ARG`, positional read targets etc.). `bash -n` parses clean.
+- New `fetch()` helper wraps all 8 skill-file downloads. On a curl
+  404/network failure it prints which URL failed, points at the
+  Releases page, and aborts before the partial install can corrupt
+  `.claude/settings.json`. Also rejects a 200-but-empty response
+  (empty file is removed before the script exits).
+- Behaviour unchanged for the happy path: same files, same chmod,
+  same hook registration order.

@@ -1,9 +1,28 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 
 AXIOM_VERSION="v1.2.2"
 REPO_BASE="https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/${AXIOM_VERSION}/.claude/skills/axiom-csc"
+
+# Download one file, fail loudly with a hint if the server 404s or the file
+# comes back empty. A silent curl failure or partial fetch leaves a broken
+# skill install, which is worse than no install.
+fetch() {
+  local url="$1" dest="$2"
+  if ! curl -fsSL "$url" -o "$dest"; then
+    echo -e "${RED}Error: failed to download ${url}.${NC}" >&2
+    echo "  Check that tag ${AXIOM_VERSION} exists at" >&2
+    echo "  https://github.com/axiom-csc/axiom-claude-skill/releases" >&2
+    echo "  and that you have network access." >&2
+    return 1
+  fi
+  if [[ ! -s "$dest" ]]; then
+    echo -e "${RED}Error: ${dest} downloaded but is empty (from ${url}).${NC}" >&2
+    rm -f "$dest"
+    return 1
+  fi
+}
 
 # ── Argument parsing ───────────────────────────────────────────────────────
 GLOBAL_MODE=false
@@ -85,14 +104,14 @@ fi
 echo -e "${BLUE}==> Installing Axiom CSC ${AXIOM_VERSION}...${NC}"
 mkdir -p "$SKILL_DIR/scripts" "$SKILL_DIR/references" "$SKILL_DIR/hooks"
 
-curl -fsSL "$REPO_BASE/SKILL.md"                      -o "$SKILL_DIR/SKILL.md"
-curl -fsSL "$REPO_BASE/hooks/pre_tool_use.py"         -o "$SKILL_DIR/hooks/pre_tool_use.py"
-curl -fsSL "$REPO_BASE/scripts/lower_ast.py"          -o "$SKILL_DIR/scripts/lower_ast.py"
-curl -fsSL "$REPO_BASE/scripts/eval_lemma.py"         -o "$SKILL_DIR/scripts/eval_lemma.py"
-curl -fsSL "$REPO_BASE/scripts/axiom_init.py"         -o "$SKILL_DIR/scripts/axiom_init.py"
-curl -fsSL "$REPO_BASE/scripts/axiom.py"              -o "$SKILL_DIR/scripts/axiom.py"
-curl -fsSL "$REPO_BASE/scripts/axiom_flush.py"        -o "$SKILL_DIR/scripts/axiom_flush.py"
-curl -fsSL "$REPO_BASE/references/INVARIANTS_SPEC.md" -o "$SKILL_DIR/references/INVARIANTS_SPEC.md"
+fetch "$REPO_BASE/SKILL.md"                      "$SKILL_DIR/SKILL.md"
+fetch "$REPO_BASE/hooks/pre_tool_use.py"         "$SKILL_DIR/hooks/pre_tool_use.py"
+fetch "$REPO_BASE/scripts/lower_ast.py"          "$SKILL_DIR/scripts/lower_ast.py"
+fetch "$REPO_BASE/scripts/eval_lemma.py"         "$SKILL_DIR/scripts/eval_lemma.py"
+fetch "$REPO_BASE/scripts/axiom_init.py"         "$SKILL_DIR/scripts/axiom_init.py"
+fetch "$REPO_BASE/scripts/axiom.py"              "$SKILL_DIR/scripts/axiom.py"
+fetch "$REPO_BASE/scripts/axiom_flush.py"        "$SKILL_DIR/scripts/axiom_flush.py"
+fetch "$REPO_BASE/references/INVARIANTS_SPEC.md" "$SKILL_DIR/references/INVARIANTS_SPEC.md"
 chmod +x "$SKILL_DIR/hooks/"*.py "$SKILL_DIR/scripts/"*.py
 
 # ── Register PreToolUse hook in settings.json ──────────────────────────────
