@@ -79,3 +79,30 @@ authorization alongside the first commit.
 
 Status: wire-through committed locally on top of `15d4290`; three local
 commits total held pending unblock of the classifier push gate.
+
+### 2026-11-07 — mode audit: AUDIT and REPAIR not implemented
+
+Audited STRICT/AUDIT/REPAIR against the hook + scripts. Findings:
+
+- No code anywhere parses `[AXIOM: AUDIT]` or `[AXIOM: REPAIR]` prompt
+  tags. `grep -rn "AXIOM:"` returns only the SKILL.md documentation line.
+- No mode-dispatch logic in `pre_tool_use.py` or any script. Every tool
+  call is evaluated under STRICT semantics regardless of what the prompt
+  says. REPAIR auto-rewrite is not implemented.
+- `AUDIT_LOG` constant in `pre_tool_use.py` writes a decision log on
+  every call, which is closer to "always-on audit logging" than the
+  documented AUDIT mode — the docs describe AUDIT as a telemetry block
+  appended to output, which does not happen.
+
+Edits (honest-docs fix, do not invent capability):
+
+- `SKILL.md` Operational Modes: marked AUDIT and REPAIR as
+  "planned, not implemented"; added a note that prompt tags are not
+  parsed today.
+- `README.md` Modes table: added a Status column; AUDIT/REPAIR rows
+  marked "Planned — prompt tag not yet parsed".
+
+Flagged for operator decision: implement AUDIT/REPAIR, or delete the
+rows entirely. AUDIT is cheap (already have a decision log and
+telemetry — just surface them on an `[AXIOM: AUDIT]` tag). REPAIR is
+substantial (needs a code-rewriter). Held out of this pass.

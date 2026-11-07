@@ -156,11 +156,15 @@ if user.id == 1:
 
 ## Modes
 
-| Mode | Trigger | Behavior |
-|------|---------|----------|
-| STRICT | _(default)_ | Halt on any UNKNOWN or violation |
-| AUDIT | `[AXIOM: AUDIT]` | Execute + append telemetry block |
-| REPAIR | `[AXIOM: REPAIR]` | Auto-rewrite violations before output |
+| Mode | Trigger | Behavior | Status |
+|------|---------|----------|--------|
+| STRICT | _(default)_ | Halt on any UNKNOWN or violation | Implemented |
+| AUDIT | `[AXIOM: AUDIT]` | Execute + append telemetry block | Planned — prompt tag not yet parsed |
+| REPAIR | `[AXIOM: REPAIR]` | Auto-rewrite violations before output | Planned — prompt tag not yet parsed |
+
+Every tool call today is evaluated under STRICT semantics regardless of
+prompt tags; the AUDIT and REPAIR rows above describe the planned surface
+and will be kept in sync as the modes land.
 
 ## Usage
 
