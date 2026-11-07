@@ -58,3 +58,24 @@ Flagged for operator decision:
 
 Status: new commit staged on top of `d0ca781`, awaiting operator push
 authorization alongside the first commit.
+
+### 2026-11-07 — push attempt + action_on_fail wire-through
+
+- Push attempted after operator pre-auth: blocked by Claude Code auto-mode
+  classifier (Remote Repoint reason, even post-repoint). Logged and continued
+  per operator standing instruction. `d37c8c1` and `15d4290` still local.
+- Local history was reset to `origin/main` and cherry-picked by the harness
+  between sessions; first commit is now `d37c8c1` (same patch as the earlier
+  `d0ca781`). Clean 2-ahead/0-behind fast-forward against `origin/main`.
+- Wired `action_on_fail` / `action_on_missing` through `eval_lemma.solve()`:
+  BLOCK → exit 1, ASK → exit 2, missing or unrecognised → BLOCK (safe
+  default so a typo cannot downgrade a guardrail to ALLOW). Added a
+  `_disposition()` helper and routed both banned and numeric-bound rules.
+- Rewrote `test_action_on_fail_is_currently_ignored` into real routing
+  coverage; added 5 tests total covering BLOCK, ASK, missing, unknown
+  value, banned-shape, and `action_on_missing` on required rules.
+- Full suite: 47/47 via `python3 -m unittest discover tests`.
+- Updated INVARIANTS_SPEC.md with a disposition-routing table.
+
+Status: wire-through committed locally on top of `15d4290`; three local
+commits total held pending unblock of the classifier push gate.

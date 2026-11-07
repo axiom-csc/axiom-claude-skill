@@ -42,6 +42,19 @@ Supported operators: `lte`, `gte`, `lt`, `gt`, `eq`
 
 | Shape | Fields | Meaning |
 |-------|--------|---------|
-| Numeric bound | `concept`, `op`, `value`, `action_on_fail` | Fail if extracted value violates `op value` |
-| Banned entity | `concept`, `banned: true`, `action_on_fail` | Fail if any matching entity is found |
-| Required entity | `concept`, `required: true`, `action_on_missing` | ASK if the entity is not found in context |
+| Numeric bound | `concept`, `op`, `value`, `action_on_fail` | Fires if extracted value violates `op value` |
+| Banned entity | `concept`, `banned: true`, `action_on_fail` | Fires if any matching entity is found |
+| Required entity | `concept`, `required: true`, `action_on_missing` | Fires if the entity is not found in context |
+
+### Disposition routing
+
+`action_on_fail` (and `action_on_missing` on required rules) routes a firing
+rule to one of two exit states:
+
+| Value | Exit | Meaning |
+|-------|------|---------|
+| `BLOCK` _(default)_ | 1 | Halt the tool call; print `AxiomConstraintViolation` |
+| `ASK` | 2 | Halt the tool call; print a targeted question for the user |
+
+Missing or unrecognised values fall back to `BLOCK` so a typo cannot silently
+downgrade a guardrail to ALLOW.

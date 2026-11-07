@@ -84,6 +84,17 @@ def load_rules(path):
             data = _parse_yaml_rules(text)
     return _merge_default_numeric(data)
 
+def _disposition(rule, key, default):
+    """Resolve a rule's disposition field (action_on_fail / action_on_missing).
+
+    Only values the init template and DEFAULT_RULES emit are recognised: BLOCK
+    and ASK. Anything else (including missing) falls back to ``default`` so a
+    typo in the yaml cannot accidentally flip a BLOCK into an ALLOW.
+    """
+    raw = str(rule.get(key, "")).strip().upper()
+    return raw if raw in ("BLOCK", "ASK") else default
+
+
 def solve(ast_path, rules_path):
     try: ast = json.loads(pathlib.Path(ast_path).read_text())
     except FileNotFoundError:
@@ -96,19 +107,34 @@ def solve(ast_path, rules_path):
         concept = rule["concept"]
         nodes = nodes_by.get(concept, [])
         if rule.get("required") and not nodes:
-            if "op" not in rule:
-                continue  # no threshold defined — skip silently instead of failing closed
-            asks.append((concept, ASK_Q.get(concept, f"What is '{concept}'?")))
-            continue
+            if "op" not in rule and not rule.get("banned"):
+                # Legacy shape: `required: true` with no `op`/`banned` and no
+                # entity in the ast means "ask the user about this concept".
+                # Respect action_on_missing if present, defaulting to ASK.
+                if _disposition(rule, "action_on_missing", "ASK") == "BLOCK":
+                    blocks.append((concept, "<missing>", "required", "true"))
+                else:
+                    asks.append((concept, ASK_Q.get(concept, f"What is '{concept}'?")))
+                continue
+            # op-shaped or banned-shaped rules fall through to the normal
+            # evaluation below (no nodes → nothing to compare → no violation).
         if rule.get("banned"):
+            disp = _disposition(rule, "action_on_fail", "BLOCK")
             for n in nodes:
-                blocks.append((concept, n["value"], "banned", "true"))
+                if disp == "ASK":
+                    asks.append((concept, f"'{concept}' pattern detected — confirm this is intended."))
+                else:
+                    blocks.append((concept, n["value"], "banned", "true"))
             continue
         if "op" in rule:
             op_fn = OPS.get(rule["op"])
+            disp = _disposition(rule, "action_on_fail", "BLOCK")
             for n in nodes:
                 if op_fn and not op_fn(n["value"], rule["value"]):
-                    blocks.append((concept, n["value"], rule["op"], rule["value"]))
+                    if disp == "ASK":
+                        asks.append((concept, f"'{concept}' = {n['value']} violates {rule['op']} {rule['value']} — confirm this is intended."))
+                    else:
+                        blocks.append((concept, n["value"], rule["op"], rule["value"]))
     for concept, actual, op, bound in blocks:
         print(f"\u274c [Lemma BLOCK] AxiomConstraintViolation: {concept} = {actual} violates {op} {bound}")
     for concept, q in asks:

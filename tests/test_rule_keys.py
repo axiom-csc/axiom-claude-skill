@@ -8,10 +8,10 @@ Pins two behaviours that were previously doc/code mismatches:
    YAML parser, so the user's threshold never applies and the baked-in
    DEFAULT_RULES limit stays in force.
 
-Also documents (not enforces) the fact that ``action_on_fail`` is
-currently metadata — ``solve()`` never reads it. If a future change
-wires it up, ``test_action_on_fail_is_currently_ignored`` will fail
-and this file + INVARIANTS_SPEC.md should be revisited together.
+Also enforces ``action_on_fail`` routing: ``BLOCK`` → exit 1,
+``ASK`` → exit 2, missing/unknown → BLOCK (safe default). The
+matching ``action_on_missing`` field routes ``required`` rules
+the same way.
 """
 
 import json
@@ -115,25 +115,29 @@ class RuleKeyTests(unittest.TestCase):
         )
         self.assertIn("lte 50000", stdout)
 
-    def test_action_on_fail_is_currently_ignored(self):
-        """Documents current behaviour: eval_lemma.solve() never reads the
-        'action_on_fail' field. A violating numeric rule produces a BLOCK
-        regardless of whether action_on_fail is 'BLOCK', 'ASK', 'WARN', or
-        omitted entirely.
-
-        If a future change wires action_on_fail through to the disposition,
-        this test will fail — update INVARIANTS_SPEC.md accordingly and
-        rewrite this test to assert the new routing instead of deleting it.
-        """
-        rules_without = textwrap.dedent(
+    def test_action_on_fail_block_routes_to_exit_1(self):
+        """action_on_fail: BLOCK → solve() returns 1 on violation."""
+        rules = textwrap.dedent(
             """\
             rules:
               - concept: transaction_value
                 op: lte
                 value: 50000
+                action_on_fail: BLOCK
             """
         )
-        rules_with_ask = textwrap.dedent(
+        ast = {"nodes": [{"concept": "transaction_value", "value": 75000}]}
+        code, stdout, _ = run_lemma(rules, ast)
+        self.assertEqual(code, 1, f"exit={code} stdout={stdout!r}")
+        self.assertIn("BLOCK", stdout)
+
+    def test_action_on_fail_ask_routes_to_exit_2(self):
+        """action_on_fail: ASK → violation produces an ASK (exit 2), not a BLOCK.
+
+        This is the wire-through fix: previously solve() ignored the field
+        entirely and always returned 1 on a numeric violation.
+        """
+        rules = textwrap.dedent(
             """\
             rules:
               - concept: transaction_value
@@ -143,22 +147,87 @@ class RuleKeyTests(unittest.TestCase):
             """
         )
         ast = {"nodes": [{"concept": "transaction_value", "value": 75000}]}
-
-        code_a, stdout_a, _ = run_lemma(rules_without, ast)
-        code_b, stdout_b, _ = run_lemma(rules_with_ask, ast)
-
+        code, stdout, _ = run_lemma(rules, ast)
         self.assertEqual(
-            code_a,
-            1,
-            f"Rule missing action_on_fail should still BLOCK today; "
-            f"exit={code_a} stdout={stdout_a!r}",
+            code, 2, f"ASK should yield exit 2, not BLOCK; exit={code} stdout={stdout!r}"
         )
+        self.assertIn("ASK", stdout)
+        self.assertIn("transaction_value", stdout)
+
+    def test_action_on_fail_missing_defaults_to_block(self):
+        """A rule missing action_on_fail still BLOCKs on violation (safe default).
+
+        axiom_init.py always emits action_on_fail, but hand-written yaml may
+        omit it; we must not silently downgrade to ALLOW.
+        """
+        rules = textwrap.dedent(
+            """\
+            rules:
+              - concept: transaction_value
+                op: lte
+                value: 50000
+            """
+        )
+        ast = {"nodes": [{"concept": "transaction_value", "value": 75000}]}
+        code, stdout, _ = run_lemma(rules, ast)
+        self.assertEqual(code, 1, f"exit={code} stdout={stdout!r}")
+
+    def test_action_on_fail_unknown_value_defaults_to_block(self):
+        """An unrecognised action_on_fail value (typo, WARN, etc.) falls back
+        to BLOCK rather than downgrading to ALLOW."""
+        rules = textwrap.dedent(
+            """\
+            rules:
+              - concept: transaction_value
+                op: lte
+                value: 50000
+                action_on_fail: WARN
+            """
+        )
+        ast = {"nodes": [{"concept": "transaction_value", "value": 75000}]}
+        code, stdout, _ = run_lemma(rules, ast)
         self.assertEqual(
-            code_b,
-            1,
-            f"action_on_fail=ASK is currently ignored and the rule still "
-            f"BLOCKs; exit={code_b} stdout={stdout_b!r}",
+            code, 1, f"Unknown action_on_fail must default to BLOCK; exit={code} stdout={stdout!r}"
         )
+
+    def test_banned_rule_action_on_fail_ask(self):
+        """Banned-shape rules also honour action_on_fail: ASK."""
+        rules = textwrap.dedent(
+            """\
+            rules:
+              - concept: auth_hardcoded_id
+                banned: true
+                action_on_fail: ASK
+            """
+        )
+        ast = {"nodes": [{"concept": "auth_hardcoded_id", "value": 1}]}
+        code, stdout, _ = run_lemma(rules, ast)
+        self.assertEqual(code, 2, f"exit={code} stdout={stdout!r}")
+        self.assertIn("ASK", stdout)
+
+    def test_action_on_missing_block_routes_required_to_exit_1(self):
+        """required rules honour action_on_missing: BLOCK as well as ASK."""
+        rules_ask = textwrap.dedent(
+            """\
+            rules:
+              - concept: role_assignment
+                required: true
+                action_on_missing: ASK
+            """
+        )
+        rules_block = textwrap.dedent(
+            """\
+            rules:
+              - concept: role_assignment
+                required: true
+                action_on_missing: BLOCK
+            """
+        )
+        ast = {"nodes": []}
+        code_ask, _, _ = run_lemma(rules_ask, ast)
+        code_block, _, _ = run_lemma(rules_block, ast)
+        self.assertEqual(code_ask, 2, f"ASK should be exit 2; got {code_ask}")
+        self.assertEqual(code_block, 1, f"BLOCK should be exit 1; got {code_block}")
 
 
 if __name__ == "__main__":
