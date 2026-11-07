@@ -18,7 +18,7 @@ pip install pyyaml --break-system-packages
 
 ## Standards
 
-- Python 3.10+ with type annotations
+- Python 3.8+ (matches the installer's minimum); use type annotations
 - All PRs must include tests covering all three epistemic states: TRUE, FALSE, UNKNOWN
 - Update `.axiom/invariants.yaml` schema docs when adding new entity types
 - Hook latency regression: cumulative `PreToolUse` runtime must stay under 1.5ms
@@ -40,7 +40,7 @@ See GitHub Issues tagged `good-first-issue`:
 
 ## Extension: Adding a New Domain
 
-1. Add extraction patterns to `scripts/lower_ast.py` under `PATTERNS`
-2. Add a matching rule template to `scripts/axiom_init.py` under `HEURISTICS`
-3. Add a domain block to `references/INVARIANTS_SPEC.md`
+1. Add extraction patterns to `.claude/skills/axiom-csc/scripts/lower_ast.py` under `PATTERNS`
+2. Add a matching rule template to `.claude/skills/axiom-csc/scripts/axiom_init.py` under `HEURISTICS`
+3. Add a domain block to `.claude/skills/axiom-csc/references/INVARIANTS_SPEC.md`
 4. Open a PR with before/after examples of what Claude would have guessed vs. what Axiom catches

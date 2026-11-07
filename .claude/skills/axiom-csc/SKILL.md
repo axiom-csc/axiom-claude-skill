@@ -1,6 +1,6 @@
 ---
 name: axiom-csc
-version: 1.0.0
+version: 1.2.2
 description: Stop Claude from guessing your security, auth, and system constraints. Deterministic Tri-State guardrails for Claude Code across any domain.
 compatibility: claude-code
 ---

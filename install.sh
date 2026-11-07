@@ -2,7 +2,7 @@
 set -e
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 
-AXIOM_VERSION="v1.2.1"
+AXIOM_VERSION="v1.2.2"
 REPO_BASE="https://raw.githubusercontent.com/axiom-csc/axiom-claude-skill/${AXIOM_VERSION}/.claude/skills/axiom-csc"
 
 # ── Argument parsing ───────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ echo -e "${GREEN}  ✓ Hook registered in ${SETTINGS_SHORT}${NC}"
 if [[ "$GLOBAL_MODE" == "false" && -z "$INIT_NOTE" ]]; then
   echo -e "${GREEN}  ✓ .axiom/invariants.yaml generated (${RULES_COUNT} rules)${NC}"
 fi
-echo -e "${GREEN}  ✓ Axiom ${AXIOM_VERSION} armed — protecting 5 failure domains${NC}"
+echo -e "${GREEN}  ✓ Axiom ${AXIOM_VERSION} armed${NC}"
 echo ""
 if [[ -n "$INIT_NOTE" ]]; then
   echo -e "${YELLOW}  ${INIT_NOTE}${NC}"

@@ -167,7 +167,7 @@ def cmd_report(args):
     redacted_entry = json.loads(redact_secrets(json.dumps(entry)))
 
     payload = {
-        "axiom_version": "1.0.0",
+        "axiom_version": "1.2.2",
         "report_type": kind,
         "note": note,
         "decision": redacted_entry.get("decision"),

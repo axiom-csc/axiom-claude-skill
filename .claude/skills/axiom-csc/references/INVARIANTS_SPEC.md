@@ -26,12 +26,22 @@ Create `.axiom/invariants.yaml` in your project root:
 
 ```yaml
 rules:
-  - field: transaction_value
+  - concept: transaction_value
     op: lte
     value: 50000
-  - field: percentage_value
+    action_on_fail: BLOCK
+  - concept: percentage_value
     op: lte
     value: 100
+    action_on_fail: BLOCK
 ```
 
 Supported operators: `lte`, `gte`, `lt`, `gt`, `eq`
+
+### Rule shapes
+
+| Shape | Fields | Meaning |
+|-------|--------|---------|
+| Numeric bound | `concept`, `op`, `value`, `action_on_fail` | Fail if extracted value violates `op value` |
+| Banned entity | `concept`, `banned: true`, `action_on_fail` | Fail if any matching entity is found |
+| Required entity | `concept`, `required: true`, `action_on_missing` | ASK if the entity is not found in context |
