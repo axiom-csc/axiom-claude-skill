@@ -186,3 +186,25 @@ convention since no prior audits existed).
   the actual target is `axiom-csc/axiom-claude-skill`.
 
 Follow-up PRIVACY.md wording fixes committed next.
+
+### 2026-11-07 — PRIVACY.md wording fixes
+
+Applied the two fixes identified in the privacy audit. Code was
+already more conservative than the doc; both edits are doc-only.
+
+- Claim 1.4 ("queued locally but never sent"): re-worded to describe
+  what the code actually does — no event is recorded at all with no
+  endpoint set; the queue file stays empty.
+- Claim 2.7 ("submitted as a public GitHub issue"): re-worded to
+  describe the real flow — Axiom opens a prefilled issue page via
+  `webbrowser.open`; the user clicks Submit on GitHub. Also added the
+  >2KB fallback (`axiom_case_report.json` written to CWD) which the
+  doc had omitted.
+- Minor: the issue-target URL now names org + repo
+  (`axiom-csc/axiom-claude-skill`) instead of just the org.
+
+Not fixed: `axiom.py:SECRET_PATTERNS` only covers `sk_live_` keys
+while the hook-side pattern in `lower_ast.py` covers both live and
+test. Flagged in the audit § 4 as low-risk because the hook blocks
+any such write upstream. Would be tightened by syncing the two
+pattern lists; left for a future pass.

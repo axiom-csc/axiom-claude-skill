@@ -8,8 +8,10 @@ explicitly enable it during install or run `axiom telemetry on`.
 ### What is sent when telemetry is on
 
 Events are only transmitted if you have also configured an endpoint in
-`~/.config/axiom-csc/config.json`. With no endpoint set, events are queued locally but
-never sent.
+`~/.config/axiom-csc/config.json`. With no endpoint set, no event is recorded at all —
+the queue file stays empty. This is stricter than queue-then-hold: nothing lands on
+disk under `~/.config/axiom-csc/queue.jsonl` until both telemetry is on and an
+endpoint is configured.
 
 Each event contains **exactly** these fields (strict allowlist — built by explicit field
 assignment, not by copying the tool input):
@@ -64,8 +66,13 @@ When you run `axiom report`:
 3. You can open the payload in `$EDITOR` to remove anything else.
 4. The full redacted payload is printed for your review.
 5. You must type `yes` to confirm submission.
-6. The payload is submitted as a **public GitHub issue** in the axiom-csc repository,
-   labelled `case-report`.
+6. Axiom opens a prefilled **public GitHub issue** page in your browser at
+   `github.com/axiom-csc/axiom-claude-skill/issues/new`, with the title, body,
+   and `case-report` label already set. **You** click Submit on GitHub after
+   reviewing the prefilled form — nothing is posted automatically. If the
+   payload is too large for a URL (over 2 KB), it is written to
+   `axiom_case_report.json` in your current directory and you attach it to a
+   new issue manually.
 
 By submitting a case report, you agree it may be included in Axiom's public benchmark
 dataset under the CC-BY-4.0 license. Do not submit proprietary code or business logic.
