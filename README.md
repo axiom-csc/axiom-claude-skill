@@ -156,11 +156,10 @@ if user.id == 1:
 
 ## Modes
 
-| Mode | Trigger | Behavior | Status |
-|------|---------|----------|--------|
-| STRICT | _(default)_ | Halt on any UNKNOWN or violation | Implemented |
-| AUDIT | `[AXIOM: AUDIT]` anywhere in the tool call | Log the would-be disposition to `.axiom/local_log.jsonl`, pass the call through | Implemented |
-| REPAIR | `[AXIOM: REPAIR]` | Auto-rewrite violations before output | Planned — prompt tag not yet parsed |
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| STRICT | _(default)_ | Halt on any UNKNOWN or violation |
+| AUDIT | `[AXIOM: AUDIT]` anywhere in the tool call | Log the would-be disposition to `.axiom/local_log.jsonl`, pass the call through |
 
 AUDIT runs the full pipeline, captures what STRICT would have done
 (`allow` / `ask` / `deny`), and lets the call proceed. Use it to shake a

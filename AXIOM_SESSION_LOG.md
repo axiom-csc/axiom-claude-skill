@@ -137,3 +137,16 @@ Operator chose: implement AUDIT, delete REPAIR.
 
 REPAIR row deletion follows in the next commit (operator-mandated
 split).
+
+### 2026-11-07 — REPAIR removed from docs
+
+Operator rationale: don't advertise until shipped. A "planned" row in
+public-facing docs is still a weaker form of the no-fabrication
+violation.
+
+- `SKILL.md`: REPAIR bullet removed.
+- `README.md` Modes table: REPAIR row removed; Status column dropped
+  (only STRICT and AUDIT remain, both implemented).
+
+If REPAIR is built later, both documents can get the row back at
+that point.

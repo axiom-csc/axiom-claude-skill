@@ -25,9 +25,6 @@ python3 .claude/skills/axiom-csc/scripts/axiom_init.py .
   `deny`), but passes the call through and records the audit entry in
   `.axiom/local_log.jsonl` with `rule_id` prefixed `audit:would_<disposition>`.
   Use this to shake rules into shape without blocking real work.
-- **REPAIR** _(planned, not implemented)_: Detect violations in a proposed
-  code block, auto-rewrite before output. The `[AXIOM: REPAIR]` prompt tag
-  is not parsed today.
 
 ## Pass 1 - Noema (Multi-Domain AST Lowering)
 
